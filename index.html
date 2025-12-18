@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Professional Stick Fighter Studio</title>
+    <style>
+        :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #0078d4; }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; height: 100vh; }
+        
+        /* 사이드바 설정 */
+        #sidebar { width: 250px; background: var(--panel); border-right: 1px solid #444; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+        canvas { flex-grow: 1; background: #fff; cursor: crosshair; image-rendering: pixelated; }
+
+        /* 하단 타임라인 */
+        #timeline { position: fixed; bottom: 0; left: 250px; right: 0; height: 120px; background: var(--panel); border-top: 1px solid #444; display: flex; align-items: center; padding: 0 20px; gap: 10px; overflow-x: auto; }
+        .frame-card { min-width: 60px; height: 80px; background: #444; border: 2px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; position: relative; }
+        .frame-card.active { border-color: var(--accent); background: #555; }
+        .frame-card:after { content: attr(data-index); position: absolute; top: 2px; left: 4px; }
+
+        /* 컨트롤 버튼 */
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        button { padding: 8px; border: none; border-radius: 4px; background: #444; color: white; cursor: pointer; transition: 0.2s; }
+        button:hover { background: var(--accent); }
+        .primary { background: var(--accent); }
+        
+        label { font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>Stick Studio</h2>
+    <label>캐릭터 관리</label>
+    <div class="btn-group">
+        <button onclick="addStickman()">스틱맨 추가</button>
+        <button onclick="addWeapon()">무기 추가</button>
+    </div>
+    
+    <label>애니메이션 제어</label>
+    <div class="btn-group">
+        <button class="primary" onclick="playAnimation()">▶ 재생</button>
+        <button onclick="stopAnimation()">■ 정지</button>
+    </div>
+    
+    <label>설정</label>
+    <div>
+        <input type="checkbox" id="onionSkin" checked onchange="render()"> 양파 껍질 보기
+    </div>
+    <div class="btn-group" style="margin-top: 20px;">
+        <button onclick="saveProject()">프로젝트 저장</button>
+        <button onclick="exportVideo()">영상 내보내기</button>
+    </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="timeline" id="frameList">
+    <button onclick="addNewFrame()" style="min-width: 100px; height: 80px; border: 2px dashed #666; background: transparent;">+ 프레임 추가</button>
+    <div id="frameList" style="display: flex; gap: 10px;"></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+
+    // --- 데이터 모델 ---
+    let frames = []; // 전체 프레임 데이터
+    let currentFrameIdx = 0;
+    let isPlaying = false;
+    let playInterval;
+
+    // 현재 작업 중인 객체들 (스틱맨, 무기 등)
+    let objects = [];
+
+    // 초기 스틱맨 구조 템플릿
+    const createStickman = (x, y) => ({
+        type: 'stickman',
+        color: '#000',
+        joints: [
+            { id: 'hip', x: x, y: y, p: null },
+            { id: 'neck', x: x, y: y-60, p: 'hip' },
+            { id: 'head', x: x, y: y-90, p: 'neck' },
+            { id: 'l_sh', x: x-20, y: y-50, p: 'neck' },
+            { id: 'l_el', x: x-40, y: y-30, p: 'l_sh' },
+            { id: 'r_sh', x: x+20, y: y-50, p: 'neck' },
+            { id: 'r_el', x: x+40, y: y-30, p: 'r_sh' },
+            { id: 'l_kn', x: x-15, y: y+40, p: 'hip' },
+            { id: 'l_ft', x: x-20, y: y+80, p: 'l_kn' },
+            { id: 'r_kn', x: x+15, y: y+40, p: 'hip' },
+            { id: 'r_ft', x: x+20, y: y+80, p: 'r_kn' }
+        ]
+    });
+
+    // --- 초기화 ---
+    function init() {
+        window.addEventListener('resize', resize);
+        resize();
+        objects.push(createStickman(width/2, height/2));
+        addNewFrame();
+        render();
+    }
+
+    function resize() {
+        width = canvas.width = window.innerWidth - 250;
+        height = canvas.height = window.innerHeight - 120;
+        render();
+    }
+
+    // --- 프레임 시스템 ---
+    function addNewFrame() {
+        // 현재 상태를 복사하여 새 프레임 생성
+        frames.push(JSON.parse(JSON.stringify(objects)));
+        currentFrameIdx = frames.length - 1;
+        updateTimelineUI();
+        render();
+    }
+
+    function updateTimelineUI() {
+        const container = document.getElementById('frameList');
+        container.innerHTML = '';
+        frames.forEach((f, i) => {
+            const card = document.createElement('div');
+            card.className = `frame-card ${i === currentFrameIdx ? 'active' : ''}`;
+            card.dataset.index = i + 1;
+            card.onclick = () => { currentFrameIdx = i; objects = JSON.parse(JSON.stringify(frames[i])); render(); updateTimelineUI(); };
+            container.appendChild(card);
+        });
+    }
+
+    // --- 렌더링 엔진 ---
+    function drawObject(obj, context, colorOverride = null) {
+        context.strokeStyle = colorOverride || obj.color;
+        context.fillStyle = colorOverride || obj.color;
+        context.lineWidth = 5;
+        context.lineCap = 'round';
+
+        obj.joints.forEach(j => {
+            if (j.p) {
+                const parent = obj.joints.find(p => p.id === j.p);
+                context.beginPath();
+                context.moveTo(parent.x, parent.y);
+                context.lineTo(j.x, j.y);
+                context.stroke();
+            }
+            // 관절 점
+            context.beginPath();
+            context.arc(j.x, j.y, 4, 0, Math.PI*2);
+            context.fill();
+
+            if (j.id === 'head') {
+                context.beginPath();
+                context.arc(j.x, j.y - 15, 20, 0, Math.PI*2);
+                context.stroke();
+            }
+        });
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, width, height);
+
+        // 1. 양파 껍질 (이전 프레임)
+        if (document.getElementById('onionSkin').checked && currentFrameIdx > 0 && !isPlaying) {
+            frames[currentFrameIdx - 1].forEach(obj => drawObject(obj, ctx, 'rgba(0,0,0,0.1)'));
+        }
+
+        // 2. 현재 객체들
+        objects.forEach(obj => drawObject(obj, ctx));
+
+        // 3. 데이터 동기화
+        if (!isPlaying) frames[currentFrameIdx] = JSON.parse(JSON.stringify(objects));
+    }
+
+    // --- 인터랙션 로직 ---
+    let selectedJoint = null;
+    let selectedObj = null;
+
+    canvas.onmousedown = (e) => {
+        const mx = e.offsetX;
+        const my = e.offsetY;
+
+        objects.forEach(obj => {
+            obj.joints.forEach(j => {
+                if (Math.hypot(j.x - mx, j.y - my) < 15) {
+                    selectedJoint = j;
+                    selectedObj = obj;
+                }
+            });
+        });
+    };
+
+    canvas.onmousemove = (e) => {
+        if (selectedJoint) {
+            const dx = e.offsetX - selectedJoint.x;
+            const dy = e.offsetY - selectedJoint.y;
+            
+            // 힙(중심점)을 움직이면 전체가 이동
+            if (selectedJoint.id === 'hip') {
+                selectedObj.joints.forEach(j => { j.x += dx; j.y += dy; });
+            } else {
+                selectedJoint.x = e.offsetX;
+                selectedJoint.y = e.offsetY;
+            }
+            render();
+        }
+    };
+
+    window.onmouseup = () => { selectedJoint = null; };
+
+    // --- 부가 기능 ---
+    function playAnimation() {
+        if (isPlaying) return;
+        isPlaying = true;
+        let i = 0;
+        playInterval = setInterval(() => {
+            objects = JSON.parse(JSON.stringify(frames[i]));
+            render();
+            i = (i + 1) % frames.length;
+        }, 100);
+    }
+
+    function stopAnimation() {
+        isPlaying = false;
+        clearInterval(playInterval);
+        objects = JSON.parse(JSON.stringify(frames[currentFrameIdx]));
+        render();
+    }
+
+    function saveProject() {
+        const data = JSON.stringify(frames);
+        const blob = new Blob([data], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'my_stick_animation.json';
+        a.click();
+    }
+
+    function addStickman() {
+        objects.push(createStickman(100, 100));
+        render();
+    }
+
+    init();
+</script>
+</body>
+</html>
