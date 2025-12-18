@@ -2,238 +2,312 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Professional Stick Fighter Studio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stick Fighter Mobile</title>
     <style>
-        :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #0078d4; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; height: 100vh; }
-        
-        /* 사이드바 설정 */
-        #sidebar { width: 250px; background: var(--panel); border-right: 1px solid #444; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
-        canvas { flex-grow: 1; background: #fff; cursor: crosshair; image-rendering: pixelated; }
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-color: #262626;
+            --accent-color: #f1c40f; /* 스틱파이터 특유의 노란색 */
+            --text-color: #eeeeee;
+        }
 
-        /* 하단 타임라인 */
-        #timeline { position: fixed; bottom: 0; left: 250px; right: 0; height: 120px; background: var(--panel); border-top: 1px solid #444; display: flex; align-items: center; padding: 0 20px; gap: 10px; overflow-x: auto; }
-        .frame-card { min-width: 60px; height: 80px; background: #444; border: 2px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; position: relative; }
-        .frame-card.active { border-color: var(--accent); background: #555; }
-        .frame-card:after { content: attr(data-index); position: absolute; top: 2px; left: 4px; }
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
 
-        /* 컨트롤 버튼 */
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-        button { padding: 8px; border: none; border-radius: 4px; background: #444; color: white; cursor: pointer; transition: 0.2s; }
-        button:hover { background: var(--accent); }
-        .primary { background: var(--accent); }
-        
-        label { font-size: 12px; color: #aaa; }
+        /* 상단 바 */
+        #header {
+            height: 50px;
+            background: var(--panel-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        /* 메인 캔버스 영역 */
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #ffffff; /* 스틱파이터는 작업 영역이 흰색인 경우가 많음 */
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none; /* 브라우저 기본 터치 동작 방지 */
+        }
+
+        /* 하단 타임라인 컨트롤 */
+        #controls {
+            height: 80px;
+            background: var(--panel-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 10px;
+            overflow-x: auto;
+            border-top: 1px solid #333;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            background: #444;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .btn.primary { background: var(--accent-color); color: #000; font-weight: bold; }
+
+        .frame-thumb {
+            min-width: 50px;
+            height: 50px;
+            background: #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            border: 2px solid transparent;
+        }
+        .frame-thumb.active { border-color: var(--accent-color); }
+
+        /* 좌우 플로팅 버튼 (모바일 편의성) */
+        .side-btn {
+            position: absolute;
+            bottom: 100px;
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
 
-<div id="sidebar">
-    <h2>Stick Studio</h2>
-    <label>캐릭터 관리</label>
-    <div class="btn-group">
-        <button onclick="addStickman()">스틱맨 추가</button>
-        <button onclick="addWeapon()">무기 추가</button>
-    </div>
-    
-    <label>애니메이션 제어</label>
-    <div class="btn-group">
-        <button class="primary" onclick="playAnimation()">▶ 재생</button>
-        <button onclick="stopAnimation()">■ 정지</button>
-    </div>
-    
-    <label>설정</label>
+<div id="header">
+    <div style="font-weight: bold; color: var(--accent-color);">STICK FIGHTER</div>
     <div>
-        <input type="checkbox" id="onionSkin" checked onchange="render()"> 양파 껍질 보기
-    </div>
-    <div class="btn-group" style="margin-top: 20px;">
-        <button onclick="saveProject()">프로젝트 저장</button>
-        <button onclick="exportVideo()">영상 내보내기</button>
+        <button class="btn" onclick="playAnim()">▶ Play</button>
+        <button class="btn" onclick="saveData()">Save</button>
     </div>
 </div>
 
-<canvas id="canvas"></canvas>
+<div id="canvas-container">
+    <canvas id="mainCanvas"></canvas>
+    <div class="side-btn" style="left: 20px;" onclick="undo()">⟲</div>
+    <div class="side-btn" style="right: 20px;" onclick="addStickman()">+</div>
+</div>
 
-<div id="timeline" id="frameList">
-    <button onclick="addNewFrame()" style="min-width: 100px; height: 80px; border: 2px dashed #666; background: transparent;">+ 프레임 추가</button>
-    <div id="frameList" style="display: flex; gap: 10px;"></div>
+<div id="controls">
+    <button class="btn primary" onclick="nextFrame()">Next Frame</button>
+    <div id="timeline" style="display: flex; gap: 5px;">
+        </div>
 </div>
 
 <script>
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
-    let width, height;
+    const container = document.getElementById('canvas-container');
 
-    // --- 데이터 모델 ---
-    let frames = []; // 전체 프레임 데이터
-    let currentFrameIdx = 0;
-    let isPlaying = false;
-    let playInterval;
-
-    // 현재 작업 중인 객체들 (스틱맨, 무기 등)
+    let frames = [];
+    let currentIdx = 0;
     let objects = [];
+    let selectedJoint = null;
+    let isPlaying = false;
 
-    // 초기 스틱맨 구조 템플릿
-    const createStickman = (x, y) => ({
-        type: 'stickman',
-        color: '#000',
-        joints: [
-            { id: 'hip', x: x, y: y, p: null },
-            { id: 'neck', x: x, y: y-60, p: 'hip' },
-            { id: 'head', x: x, y: y-90, p: 'neck' },
-            { id: 'l_sh', x: x-20, y: y-50, p: 'neck' },
-            { id: 'l_el', x: x-40, y: y-30, p: 'l_sh' },
-            { id: 'r_sh', x: x+20, y: y-50, p: 'neck' },
-            { id: 'r_el', x: x+40, y: y-30, p: 'r_sh' },
-            { id: 'l_kn', x: x-15, y: y+40, p: 'hip' },
-            { id: 'l_ft', x: x-20, y: y+80, p: 'l_kn' },
-            { id: 'r_kn', x: x+15, y: y+40, p: 'hip' },
-            { id: 'r_ft', x: x+20, y: y+80, p: 'r_kn' }
-        ]
-    });
+    // --- 스틱맨 구조 정의 ---
+    function createStickman(x, y) {
+        return {
+            type: 'stickman',
+            joints: [
+                { id: 'hip', x: x, y: y, p: null },
+                { id: 'neck', x: x, y: y-50, p: 'hip' },
+                { id: 'head', x: x, y: y-75, p: 'neck' },
+                { id: 'l_arm', x: x-30, y: y-30, p: 'neck' },
+                { id: 'r_arm', x: x+30, y: y-30, p: 'neck' },
+                { id: 'l_leg', x: x-20, y: y+50, p: 'hip' },
+                { id: 'r_leg', x: x+20, y: y+50, p: 'hip' }
+            ]
+        };
+    }
 
     // --- 초기화 ---
     function init() {
-        window.addEventListener('resize', resize);
         resize();
-        objects.push(createStickman(width/2, height/2));
-        addNewFrame();
+        window.addEventListener('resize', resize);
+        objects.push(createStickman(canvas.width/2, canvas.height/2));
+        saveToFrame();
+        updateUI();
+        
+        // 터치 및 마우스 이벤트 통합 등록
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('mousemove', drag);
+        canvas.addEventListener('mouseup', endDrag);
+        
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrag(e.touches[0]); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); drag(e.touches[0]); }, {passive: false});
+        canvas.addEventListener('touchend', endDrag);
+
         render();
     }
 
     function resize() {
-        width = canvas.width = window.innerWidth - 250;
-        height = canvas.height = window.innerHeight - 120;
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
         render();
     }
 
-    // --- 프레임 시스템 ---
-    function addNewFrame() {
-        // 현재 상태를 복사하여 새 프레임 생성
-        frames.push(JSON.parse(JSON.stringify(objects)));
-        currentFrameIdx = frames.length - 1;
-        updateTimelineUI();
-        render();
-    }
+    // --- 드래그 로직 ---
+    function startDrag(e) {
+        if (isPlaying) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
 
-    function updateTimelineUI() {
-        const container = document.getElementById('frameList');
-        container.innerHTML = '';
-        frames.forEach((f, i) => {
-            const card = document.createElement('div');
-            card.className = `frame-card ${i === currentFrameIdx ? 'active' : ''}`;
-            card.dataset.index = i + 1;
-            card.onclick = () => { currentFrameIdx = i; objects = JSON.parse(JSON.stringify(frames[i])); render(); updateTimelineUI(); };
-            container.appendChild(card);
+        objects.forEach(obj => {
+            obj.joints.forEach(j => {
+                if (Math.hypot(j.x - x, j.y - y) < 25) { // 모바일 대응용 넓은 히트박스
+                    selectedJoint = { j, obj };
+                }
+            });
         });
     }
 
-    // --- 렌더링 엔진 ---
-    function drawObject(obj, context, colorOverride = null) {
-        context.strokeStyle = colorOverride || obj.color;
-        context.fillStyle = colorOverride || obj.color;
-        context.lineWidth = 5;
-        context.lineCap = 'round';
+    function drag(e) {
+        if (!selectedJoint) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
 
-        obj.joints.forEach(j => {
-            if (j.p) {
-                const parent = obj.joints.find(p => p.id === j.p);
-                context.beginPath();
-                context.moveTo(parent.x, parent.y);
-                context.lineTo(j.x, j.y);
-                context.stroke();
-            }
-            // 관절 점
-            context.beginPath();
-            context.arc(j.x, j.y, 4, 0, Math.PI*2);
-            context.fill();
+        const dx = x - selectedJoint.j.x;
+        const dy = y - selectedJoint.j.y;
 
-            if (j.id === 'head') {
-                context.beginPath();
-                context.arc(j.x, j.y - 15, 20, 0, Math.PI*2);
-                context.stroke();
-            }
+        if (selectedJoint.j.id === 'hip') {
+            selectedJoint.obj.joints.forEach(joint => {
+                joint.x += dx; joint.y += dy;
+            });
+        } else {
+            selectedJoint.j.x = x;
+            selectedJoint.j.y = y;
+        }
+        render();
+    }
+
+    function endDrag() {
+        selectedJoint = null;
+        saveToFrame();
+    }
+
+    // --- 시스템 로직 ---
+    function saveToFrame() {
+        frames[currentIdx] = JSON.parse(JSON.stringify(objects));
+    }
+
+    function nextFrame() {
+        saveToFrame();
+        currentIdx++;
+        if (!frames[currentIdx]) {
+            frames[currentIdx] = JSON.parse(JSON.stringify(frames[currentIdx-1]));
+        }
+        objects = JSON.parse(JSON.stringify(frames[currentIdx]));
+        updateUI();
+        render();
+    }
+
+    function updateUI() {
+        const timeline = document.getElementById('timeline');
+        timeline.innerHTML = '';
+        frames.forEach((f, i) => {
+            const div = document.createElement('div');
+            div.className = `frame-thumb ${i === currentIdx ? 'active' : ''}`;
+            div.innerText = i + 1;
+            div.onclick = () => {
+                currentIdx = i;
+                objects = JSON.parse(JSON.stringify(frames[i]));
+                updateUI();
+                render();
+            };
+            timeline.appendChild(div);
         });
     }
 
     function render() {
-        ctx.clearRect(0, 0, width, height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 1. 양파 껍질 (이전 프레임)
-        if (document.getElementById('onionSkin').checked && currentFrameIdx > 0 && !isPlaying) {
-            frames[currentFrameIdx - 1].forEach(obj => drawObject(obj, ctx, 'rgba(0,0,0,0.1)'));
+        // 양파 껍질 (이전 프레임 잔상)
+        if (currentIdx > 0 && !isPlaying) {
+            drawData(frames[currentIdx-1], 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.05)');
         }
 
-        // 2. 현재 객체들
-        objects.forEach(obj => drawObject(obj, ctx));
-
-        // 3. 데이터 동기화
-        if (!isPlaying) frames[currentFrameIdx] = JSON.parse(JSON.stringify(objects));
+        // 현재 스틱맨 그리기
+        drawData(objects, 'black', '#f1c40f');
     }
 
-    // --- 인터랙션 로직 ---
-    let selectedJoint = null;
-    let selectedObj = null;
-
-    canvas.onmousedown = (e) => {
-        const mx = e.offsetX;
-        const my = e.offsetY;
-
-        objects.forEach(obj => {
+    function drawData(dataList, lineColor, jointColor) {
+        dataList.forEach(obj => {
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = lineColor;
+            
             obj.joints.forEach(j => {
-                if (Math.hypot(j.x - mx, j.y - my) < 15) {
-                    selectedJoint = j;
-                    selectedObj = obj;
+                if (j.p) {
+                    const parent = obj.joints.find(p => p.id === j.p);
+                    ctx.beginPath();
+                    ctx.moveTo(parent.x, parent.y);
+                    ctx.lineTo(j.x, j.y);
+                    ctx.stroke();
+                }
+                
+                // 관절 노드 (스틱파이터 특유의 원)
+                ctx.fillStyle = jointColor;
+                ctx.beginPath();
+                ctx.arc(j.x, j.y, 6, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+
+                if (j.id === 'head') {
+                    ctx.beginPath();
+                    ctx.arc(j.x, j.y - 18, 18, 0, Math.PI*2);
+                    ctx.stroke();
                 }
             });
         });
-    };
+    }
 
-    canvas.onmousemove = (e) => {
-        if (selectedJoint) {
-            const dx = e.offsetX - selectedJoint.x;
-            const dy = e.offsetY - selectedJoint.y;
-            
-            // 힙(중심점)을 움직이면 전체가 이동
-            if (selectedJoint.id === 'hip') {
-                selectedObj.joints.forEach(j => { j.x += dx; j.y += dy; });
-            } else {
-                selectedJoint.x = e.offsetX;
-                selectedJoint.y = e.offsetY;
-            }
-            render();
-        }
-    };
-
-    window.onmouseup = () => { selectedJoint = null; };
-
-    // --- 부가 기능 ---
-    function playAnimation() {
+    function playAnim() {
         if (isPlaying) return;
         isPlaying = true;
         let i = 0;
-        playInterval = setInterval(() => {
+        const timer = setInterval(() => {
             objects = JSON.parse(JSON.stringify(frames[i]));
             render();
-            i = (i + 1) % frames.length;
+            i++;
+            if (i >= frames.length) {
+                clearInterval(timer);
+                isPlaying = false;
+                objects = JSON.parse(JSON.stringify(frames[currentIdx]));
+                render();
+            }
         }, 100);
-    }
-
-    function stopAnimation() {
-        isPlaying = false;
-        clearInterval(playInterval);
-        objects = JSON.parse(JSON.stringify(frames[currentFrameIdx]));
-        render();
-    }
-
-    function saveProject() {
-        const data = JSON.stringify(frames);
-        const blob = new Blob([data], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'my_stick_animation.json';
-        a.click();
     }
 
     function addStickman() {
@@ -243,5 +317,6 @@
 
     init();
 </script>
+
 </body>
 </html>
